@@ -33,7 +33,7 @@ function parse(raw){let src=raw.replace(/−/g,'-').replace(/²/g,'^2').replace(
 }
 const equivalent=(answer,p)=>{try{let q=parse(answer);return q.length===p.c.length&&q.every((v,i)=>v===p.c[i])}catch{return false}};
 // Factorizations must have multiplicative structure; simply copying the original expression does not count.
-function factored(answer,p){if(!equivalent(answer,p))return false;let a=answer.replace(/\s/g,'').replace(/−/g,'-');if(!a.includes('(')||!a.includes(')'))return false;if(/^\(.*\)$/.test(a)&&!/^\d+\(/.test(a))return false;return true}
+function factored(answer,p){if(!equivalent(answer,p))return false;let a=answer.replace(/\s/g,'').replace(/−/g,'-');if(!a.includes('(')||!a.includes(')'))return false;if(/^\(.*\)$/.test(a)&&!/^\d+\(/.test(a)&&((a.match(/\(/g)||[]).length<2))return false;return true}
 const save=()=>{try{localStorage.setItem('factorquest_v2',JSON.stringify({level:state.level,stars:state.stars,streak:state.streak,correct:state.correct,total:state.total,success:state.success,finished:state.finished}))}catch{}};
 let saved={};try{saved=JSON.parse(localStorage.getItem('factorquest_v2'))||{}}catch{}
 let state={level:Math.min(6,Math.max(1,saved.level||1)),stars:saved.stars||0,streak:saved.streak||0,correct:saved.correct||0,total:saved.total||0,success:saved.success||0,finished:!!saved.finished,tries:0,answered:false,selected:-1,problem:null,mode:'mc',choices:[]};
