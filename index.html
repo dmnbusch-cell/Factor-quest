@@ -23,17 +23,57 @@ function generate(level){let a,b,c,d,k,p={};
  p.c=trim(p.c);p.question=polynomial(p.c);return p;
 }
 // Parse algebraic multiplication with parentheses, signed integers, x and exponents, without executing submitted code.
-function parse(raw){let src=raw.replace(/−/g,'-').replace(/²/g,'^2').replace(/\s/g,'').toLowerCase(),tokens=src.match(/\d+|x|\^|[()+*\-]/g)||[];if(!src||tokens.join('')!==src||tokens.length>100)throw Error('syntax');let i=0;
- const add=(a,b,sign)=>trim(Array.from({length:Math.max(a.length,b.length)},(_,j)=>(a[j]||0)+sign*(b[j]||0)));
- function primary(){let t=tokens[i++];if(t==='('){let p=expr();if(tokens[i++]!==')')throw Error('parentheses');return p}if(t==='x')return[0,1];if(/^\d+$/.test(t||''))return[+t];if(t==='-')return primary().map(v=>-v);if(t==='+')return primary();throw Error('term')}
- function power(){let p=primary();if(tokens[i]==='^'){i++;let n=Number(tokens[i++]);if(!Number.isInteger(n)||n<0||n>3)throw Error('power');let out=[1];for(let j=0;j<n;j++)out=mul(out,p);return out}return p}
- function term(){let p=power();while(tokens[i]==='*'||tokens[i]==='('||tokens[i]==='x'||/^\d+$/.test(tokens[i]||'')){if(tokens[i]==='*')i++;p=mul(p,power())}return p}
- function expr(){let p=term();while(tokens[i]==='+'||tokens[i]==='-'){let sign=tokens[i++]==='-'?-1:1;p=add(p,term(),sign)}return p}
- let out=trim(expr());if(i!==tokens.length)throw Error('syntax');return out;
+function parse(raw){
+ let src=raw.replace(/[−–]/g,'-').replace(/²/g,'^2').replace(/×/g,'*').replace(/\s/g,'').toLowerCase();
+ let tokens=src.match(/\d+|x|\^|[()+*\-]/g)||[];
+ if(!src||tokens.join('')!==src||tokens.length>100)throw Error('syntax');
+ let i=0;
+ const node=(c,op,kids=[])=>({c:trim(c),op,kids});
+ const add=(a,b,sign)=>node(Array.from({length:Math.max(a.c.length,b.c.length)},(_,j)=>(a.c[j]||0)+sign*(b.c[j]||0)),'add',[a,b]);
+ const multiply=(a,b)=>node(mul(a.c,b.c),'mul',[a,b]);
+ function primary(){
+  let t=tokens[i++];
+  if(t==='('){let v=expr();if(tokens[i++]!==')')throw Error('parentheses');return v}
+  if(t==='x')return node([0,1],'atom');
+  if(/^\d+$/.test(t||''))return node([Number(t)],'atom');
+  if(t==='-')return multiply(node([-1],'atom'),primary());
+  if(t==='+')return primary();
+  throw Error('term');
+ }
+ function power(){let p=primary();if(tokens[i]==='^'){
+  i++;let n=Number(tokens[i++]);if(!Number.isInteger(n)||n<0||n>3)throw Error('power');
+  let out=node([1],'atom');for(let j=0;j<n;j++)out=multiply(out,p);return out;
+ }return p}
+ function term(){let p=power();while(tokens[i]==='*'||tokens[i]==='('||tokens[i]==='x'||/^\d+$/.test(tokens[i]||'')){
+  if(tokens[i]==='*')i++;p=multiply(p,power())
+ }return p}
+ function expr(){let p=term();while(tokens[i]==='+'||tokens[i]==='-'){
+  let sign=tokens[i++]==='-'?-1:1;p=add(p,term(),sign)
+ }return p}
+ let out=expr();if(i!==tokens.length)throw Error('syntax');
+ return out;
 }
-const equivalent=(answer,p)=>{try{let q=parse(answer);return q.length===p.c.length&&q.every((v,i)=>v===p.c[i])}catch{return false}};
-// Factorizations must have multiplicative structure; simply copying the original expression does not count.
-function factored(answer,p){if(!equivalent(answer,p))return false;let a=answer.replace(/\s/g,'').replace(/−/g,'-');if(!a.includes('(')||!a.includes(')'))return false;if(/^\(.*\)$/.test(a)&&!/^\d+\(/.test(a)&&((a.match(/\(/g)||[]).length<2))return false;return true}
+const equivalent=(answer,p)=>{try{let q=parse(answer).c;return q.length===p.c.length&&q.every((v,i)=>v===p.c[i])}catch{return false}};
+function factored(answer,p){
+ let tree;try{tree=parse(answer)}catch{return false}
+ if(tree.c.length!==p.c.length||tree.c.some((v,i)=>v!==p.c[i]))return false;
+ // A fully factored quadratic is a product of two primitive linear expressions,
+ // and a fully factored GCF-binomial is a primitive linear expression times its GCF.
+ // Additional sums, quadratic factors, and unremoved common factors are rejected.
+ const leaves=[];
+ function flatten(t){if(t.op==='mul'){t.kids.forEach(flatten)}else leaves.push(t)}
+ flatten(tree);
+ let linears=0,numeric=1;
+ for(const f of leaves){
+  const c=f.c;
+  if(c.length===1){numeric*=c[0];continue}
+  if(c.length!==2||!c[1]||gcd(c[0],c[1])!==1)return false;
+  linears++;
+ }
+ if(linears!==p.c.length-1)return false;
+ const common=p.c.reduce((g,v)=>gcd(g,v),0);
+ return Math.abs(numeric)===common;
+}
 const save=()=>{try{localStorage.setItem('factorquest_v2',JSON.stringify({level:state.level,stars:state.stars,streak:state.streak,correct:state.correct,total:state.total,success:state.success,finished:state.finished}))}catch{}};
 let saved={};try{saved=JSON.parse(localStorage.getItem('factorquest_v2'))||{}}catch{}
 let state={level:Math.min(6,Math.max(1,saved.level||1)),stars:saved.stars||0,streak:saved.streak||0,correct:saved.correct||0,total:saved.total||0,success:saved.success||0,finished:!!saved.finished,tries:0,answered:false,selected:-1,problem:null,mode:'mc',choices:[]};
